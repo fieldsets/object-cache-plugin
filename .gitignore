@@ -1,0 +1,10 @@
+.env
+*.env
+.log
+
+config.json
+
+# Editor output
+.vscode/
+.editorconfig
+.DS_Store

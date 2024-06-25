@@ -1,0 +1,12 @@
+{
+    "schemas":[],
+    "plugins":[
+        {
+            "name": "Fieldsets Redis Cache",
+            "token": "cache-plugin-redis",
+            "url": "git@github.com:fieldsets/cache-plugin-redis.git"
+        }
+    ],
+    "packages":[],
+    "containers": ["fieldsets-cache"]
+}
