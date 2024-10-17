@@ -1,31 +1,43 @@
 {
     Import-Module Pode
     Import-Module PsRedis
-    $redis_host = [System.Environment]::GetEnvironmentVariable('REDIS_HOST')
-    $redis_port = [System.Environment]::GetEnvironmentVariable('REDIS_PORT')
-    $redis_index = [System.Environment]::GetEnvironmentVariable('OBJECT_CACHE_INDEX')
 
     # For Connection Strig See: https://stackexchange.github.io/StackExchange.Redis/Configuration
     $params = @{
-        Name = 'Redis'
         Set = {
             param($key, $value, $ttl)
             Import-Module PsRedis
-            $script_block = {
+
+            $redis_host = [System.Environment]::GetEnvironmentVariable('REDIS_HOST')
+            $redis_port = [System.Environment]::GetEnvironmentVariable('REDIS_PORT')
+            $redis_index = [System.Environment]::GetEnvironmentVariable('OBJECT_CACHE_INDEX')
+            $redis_connection_string = "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False"
+
+            $ttl_timespan = New-TimeSpan -Minutes $ttl
+
+            [ScriptBlock]$script_block = {
                 param($k, $v, $t)
-                Remove-RedisKey -Key $k | Out-Null
-                Add-RedisKey -Key $k -Value $v -TTL $t
+                Remove-RedisKey -Key "object-cache:$($k)" | Out-PodeHost
+                Add-RedisKey -Key "object-cache:$($k)" -Value $v -TTL $t | Out-PodeHost
             }
-            $null = Invoke-RedisScript -ConnectionString "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False" -ScriptBlock $script_block -Arguments @($key,$value,$ttl)
+            Invoke-RedisScript -ConnectionString "$($redis_connection_string)" -ScriptBlock $script_block -Arguments @($key,$value,$ttl_timespan) | Out-PodeHost
         }
         Get = {
             param($key, $metadata)
             Import-Module PsRedis
-            $script_block = {
+
+            $redis_host = [System.Environment]::GetEnvironmentVariable('REDIS_HOST')
+            $redis_port = [System.Environment]::GetEnvironmentVariable('REDIS_PORT')
+            $redis_index = [System.Environment]::GetEnvironmentVariable('OBJECT_CACHE_INDEX')
+            $redis_connection_string = "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False"
+
+            "Connection String: $($redis_connection_string)" | Out-PodeHost
+
+            [ScriptBlock]$script_block = {
                 param($k)
-                return Get-RedisKeyDetails -Key $k -Type 'string'
+                return Get-RedisKeyDetails -Key "object-cache:$($k)" -Type 'string'
             }
-            $details = Invoke-RedisScript -ConnectionString "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False" -ScriptBlock $script_block -Arguments @($key)
+            $details = Invoke-RedisScript -ConnectionString "$($redis_connection_string)" -ScriptBlock $script_block -Arguments @($key)
 
             $value = [System.Management.Automation.Internal.StringDecorated]::new($details.Value).ToString('PlainText')
             if ([string]::IsNullOrEmpty($value) -or ($value -ieq '(nil)')) {
@@ -49,56 +61,89 @@
         Test = {
             param($key)
             Import-Module PsRedis
-            $script_block = {
+
+            $redis_host = [System.Environment]::GetEnvironmentVariable('REDIS_HOST')
+            $redis_port = [System.Environment]::GetEnvironmentVariable('REDIS_PORT')
+            $redis_index = [System.Environment]::GetEnvironmentVariable('OBJECT_CACHE_INDEX')
+            $redis_connection_string = "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False"
+
+            [ScriptBlock]$script_block = {
                 param($k)
-                $ttl = Get-RedisKeyTTL -Key $k
-                if ([Int]$ttl -eq -2) {
+                $count = Get-RedisKeysCount -Key "object-cache:$($k)"
+                if ([string]::IsNullOrEmpty($count) -or [Int]$count -eq 0) {
+                    return $false
+                } elseif ([Int]$count -gt 0) {
+                    return $true
+                } else {
                     return $false
                 }
-                return $true
             }
-            $exists = Invoke-RedisScript -ConnectionString "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False" -ScriptBlock $script_block -Arguments @($key)
+            $exists = Invoke-RedisScript -ConnectionString "$($redis_connection_string)" -ScriptBlock $script_block -Arguments @($key)
             return $exists
         }
         Remove = {
             param($key)
             Import-Module PsRedis
-            $script_block = {
+
+            $redis_host = [System.Environment]::GetEnvironmentVariable('REDIS_HOST')
+            $redis_port = [System.Environment]::GetEnvironmentVariable('REDIS_PORT')
+            $redis_index = [System.Environment]::GetEnvironmentVariable('OBJECT_CACHE_INDEX')
+            $redis_connection_string = "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False"
+
+            [ScriptBlock]$script_block = {
                 param($k)
-                Remove-RedisKey -Key $k | Out-Null
+                Remove-RedisKey -Key "object-cache:$($k)" | Out-PodeHost
             }
-            $null = Invoke-RedisScript -ConnectionString "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False" -ScriptBlock $script_block -Arguments @($key)
+            $null = Invoke-RedisScript -ConnectionString "$($redis_connection_string)" -ScriptBlock $script_block -Arguments @($key)
         }
-        Clear = {}
+        Clear = {
+            Import-Module PsRedis
+
+            $redis_host = [System.Environment]::GetEnvironmentVariable('REDIS_HOST')
+            $redis_port = [System.Environment]::GetEnvironmentVariable('REDIS_PORT')
+            $redis_index = [System.Environment]::GetEnvironmentVariable('OBJECT_CACHE_INDEX')
+            $redis_connection_string = "$($redis_host):$($redis_port),defaultDatabase=$($redis_index),ssl=False,abortConnect=False"
+
+            [ScriptBlock]$script_block = {
+                Remove-RedisKeys -Pattern 'object-cache:*' | Out-PodeHost
+            }
+            $null = Invoke-RedisScript -ConnectionString "$($redis_connection_string)" -ScriptBlock $script_block
+        }
     }
 
-    Write-Information -MessageData 'Adding Redis Cache To Pode' -InformationAction Continue
-    Add-PodeCacheStorage @params
-
+    Set-PodeCurrentRunspaceName -Name 'Object-Cache-Redis'
     Write-Information -MessageData 'Setting Default Cache' -InformationAction Continue
     Set-PodeCacheDefaultStorage -Name 'Redis'
 
+    Write-Information -MessageData 'Adding Redis Cache To Pode' -InformationAction Continue
+    Add-PodeCacheStorage -Default -Name 'Redis' @params
+
     Write-Information -MessageData 'Setting Object Cache Endpoint' -InformationAction Continue
-    Add-PodeEndpoint -Address * -Port 8080 -Protocol Http -Name 'ObjectCache'
+    $api_port = [System.Environment]::GetEnvironmentVariable('OBJECT_CACHE_API_PORT')
+    Add-PodeEndpoint -Address * -Port "$($api_port)" -Protocol Http -Name 'Object-Cache'
 
     Write-Information -MessageData 'Adding Routes' -InformationAction Continue
+
+    # Read Requests
     Add-PodeRoute -Method Get -Path '/' -ScriptBlock {
-        Write-PodeTextResponse -Value 'Some Message'
+        Write-PodeTextResponse -Value 'Fieldsets Redis Object Cache Plugin'
     }
 
-    Add-PodeRoute -Method Post -Path '/object-cache/:key/:value' -ScriptBlock {
+    Add-PodeRoute -Method Get -Path '/object-cache/:key' -ScriptBlock {
         $key = $WebEvent.Parameters['key']
-        $value = $WebEvent.Parameters['value']
-        Set-PodeCache -Key "$($key)" -InputObject "$($value)" -Ttl 60 -Storage 'Redis'
+        "Fetching Key: $($key)" | Out-PodeHost
+        $value = Get-PodeCache -Key "$($key)" -Storage 'Redis' -Metadata
+        "Key $($key) has value: $($value)" | Out-PodeHost
         Write-PodeJsonResponse -Value @{
             key = $key
             value = $value
         }
     }
 
-    Add-PodeRoute -Method Get -Path '/object-cache/:key' -ScriptBlock {
+    Add-PodeRoute -Method Post -Path '/object-cache/:key/:value' -ScriptBlock {
         $key = $WebEvent.Parameters['key']
-        $value = Get-PodeCache -Key "$($key)" -Storage 'Redis'
+        $value = $WebEvent.Parameters['value']
+        Set-PodeCache -Key "$($key)" -InputObject "$($value)" -Ttl 60 -Storage 'Redis'
         Write-PodeJsonResponse -Value @{
             key = $key
             value = $value

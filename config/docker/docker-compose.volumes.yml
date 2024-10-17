@@ -1,0 +1,4 @@
+services:
+    fieldsets-local:
+        volumes:
+            - ${FIELDSETS_PLUGINS_PATH:-./plugins/}object-cache-plugin/lib:/usr/local/fieldsets/lib/plugins/object-cache-plugin

@@ -1,0 +1,7 @@
+services:
+    fieldsets-local:
+        environment:
+            OBJECT_CACHE_INDEX: ${OBJECT_CACHE_INDEX:-0}
+            OBJECT_CACHE_API_PORT: ${OBJECT_CACHE_API_PORT:-8080}
+            REDIS_HOST: ${REDIS_HOST:-0.0.0.0}
+            REDIS_PORT: ${REDIS_PORT:-6379}
