@@ -8,5 +8,5 @@
         }
     ],
     "packages":[],
-    "containers": ["fieldsets-cache"]
+    "containers": ["fieldsets-local"]
 }
