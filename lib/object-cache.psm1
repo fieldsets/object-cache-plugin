@@ -2,7 +2,7 @@
 .Synopsis
 Get a cache value by key
 #>
-function cacheGet {
+function objectCacheGet {
     Param(
         [Parameter(Mandatory=$true,Position=0)][String]$key
     )
@@ -11,10 +11,10 @@ function cacheGet {
 
     return $response
 }
-Export-ModuleMember -Function cacheGet
+Export-ModuleMember -Function objectCacheGet
 
 
-function cacheSet {
+function objectCacheSet {
     Param(
         [Parameter(Mandatory=$true,Position=0)][String]$key,
         [Parameter(Mandatory=$true,Position=1)][String]$value
@@ -23,4 +23,4 @@ function cacheSet {
 
     return $response
 }
-Export-ModuleMember -Function cacheSet
+Export-ModuleMember -Function objectCacheSet
